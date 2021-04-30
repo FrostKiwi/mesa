@@ -257,8 +257,9 @@ crocus_indirect_draw_vbo(struct crocus_context *ice,
    struct crocus_batch *batch = &ice->batches[CROCUS_BATCH_RENDER];
    struct pipe_draw_info info = *dinfo;
    struct pipe_draw_indirect_info indirect = *dindirect;
+   const struct gen_device_info *devinfo = &batch->screen->devinfo;
 
-   if (indirect.indirect_draw_count &&
+   if (devinfo->is_haswell && indirect.indirect_draw_count &&
        ice->state.predicate == CROCUS_PREDICATE_STATE_USE_BIT) {
       /* Upload MI_PREDICATE_RESULT to GPR15.*/
       ice->vtbl.load_register_reg64(batch, CS_GPR(15), MI_PREDICATE_RESULT);
@@ -282,7 +283,7 @@ crocus_indirect_draw_vbo(struct crocus_context *ice,
       indirect.offset += indirect.stride;
    }
 
-   if (indirect.indirect_draw_count &&
+   if (devinfo->is_haswell && indirect.indirect_draw_count &&
        ice->state.predicate == CROCUS_PREDICATE_STATE_USE_BIT) {
       /* Restore MI_PREDICATE_RESULT. */
       ice->vtbl.load_register_reg64(batch, MI_PREDICATE_RESULT, CS_GPR(15));
