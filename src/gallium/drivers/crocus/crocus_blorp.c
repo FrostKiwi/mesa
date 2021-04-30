@@ -260,7 +260,7 @@ blorp_emit_urb_config(struct blorp_batch *blorp_batch,
    struct crocus_context *ice = blorp_batch->blorp->driver_ctx;
    ice->vtbl.calculate_urb_fence(batch, 0, vs_entry_size, sf_entry_size);
 #else
-   genX(upload_urb)(batch, vs_entry_size, false, 0);
+   genX(upload_urb)(batch, vs_entry_size, false, vs_entry_size);
 #endif
 }
 #endif
