@@ -320,31 +320,23 @@ crocus_isl_format_for_pipe_format(enum pipe_format pf)
    return table[pf];
 }
 
-static enum isl_format get_gen4_texture_format(enum pipe_format pformat, enum isl_format def_format)
+static enum isl_format
+get_texture_format(enum pipe_format pformat, enum isl_format def_format)
 {
    switch (pformat) {
-   case PIPE_FORMAT_L8_UNORM:
-      return ISL_FORMAT_L8_UNORM;
-   case PIPE_FORMAT_L8A8_UNORM:
-      return ISL_FORMAT_L8A8_UNORM;
-   case PIPE_FORMAT_A16_UNORM:
-      return ISL_FORMAT_A16_UNORM;
-   case PIPE_FORMAT_L16_UNORM:
-      return ISL_FORMAT_L16_UNORM;
-   case PIPE_FORMAT_L16A16_UNORM:
-      return ISL_FORMAT_L16A16_UNORM;
-   case PIPE_FORMAT_A16_FLOAT:
-      return ISL_FORMAT_A16_FLOAT;
-   case PIPE_FORMAT_L16_FLOAT:
-      return ISL_FORMAT_L16_FLOAT;
-   case PIPE_FORMAT_L16A16_FLOAT:
-      return ISL_FORMAT_L16A16_FLOAT;
-   case PIPE_FORMAT_A32_FLOAT:
-      return ISL_FORMAT_A32_FLOAT;
-   case PIPE_FORMAT_L32_FLOAT:
-      return ISL_FORMAT_L32_FLOAT;
-   case PIPE_FORMAT_L32A32_FLOAT:
-      return ISL_FORMAT_L32A32_FLOAT;
+   case PIPE_FORMAT_A16_UNORM:            return ISL_FORMAT_A16_UNORM;
+   case PIPE_FORMAT_A16_FLOAT:            return ISL_FORMAT_A16_FLOAT;
+   case PIPE_FORMAT_A32_FLOAT:            return ISL_FORMAT_A32_FLOAT;
+
+   case PIPE_FORMAT_L8_UNORM:             return ISL_FORMAT_L8_UNORM;
+   case PIPE_FORMAT_L16_UNORM:            return ISL_FORMAT_L16_UNORM;
+   case PIPE_FORMAT_L16_FLOAT:            return ISL_FORMAT_L16_FLOAT;
+   case PIPE_FORMAT_L32_FLOAT:            return ISL_FORMAT_L32_FLOAT;
+
+   case PIPE_FORMAT_L8A8_UNORM:           return ISL_FORMAT_L8A8_UNORM;
+   case PIPE_FORMAT_L16A16_UNORM:         return ISL_FORMAT_L16A16_UNORM;
+   case PIPE_FORMAT_L16A16_FLOAT:         return ISL_FORMAT_L16A16_FLOAT;
+   case PIPE_FORMAT_L32A32_FLOAT:         return ISL_FORMAT_L32A32_FLOAT;
    default:
       return def_format;
    }
@@ -381,7 +373,7 @@ crocus_format_for_usage(const struct gen_device_info *devinfo,
      swizzle = ISL_SWIZZLE_IDENTITY;
    }
    if (!(usage & ISL_SURF_USAGE_RENDER_TARGET_BIT)) {
-     format = get_gen4_texture_format(pformat, format);
+     format = get_texture_format(pformat, format);
    }
    if (devinfo->gen < 6) {
      if (pformat == PIPE_FORMAT_Z32_FLOAT_S8X24_UINT)
