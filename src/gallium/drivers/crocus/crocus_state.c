@@ -6414,7 +6414,7 @@ crocus_upload_render_state(struct crocus_context *ice,
                        (char *)draw->index.user + start_offset,
                        &offset, &ice->state.last_res.index_buffer);
          offset -= start_offset;
-         size = sc->count * draw->index_size;
+         size = start_offset + sc->count * draw->index_size;
       } else {
          struct crocus_resource *res = (void *) draw->index.resource;
          res->bind_history |= PIPE_BIND_INDEX_BUFFER;
