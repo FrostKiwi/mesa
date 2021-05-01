@@ -1174,10 +1174,11 @@ setup_l3_config(struct crocus_batch *batch, const struct intel_l3_config *cfg)
 }
 
 static void
-emit_l3_state(struct crocus_batch *batch)
+emit_l3_state(struct crocus_batch *batch, bool compute)
 {
 //   struct crocus_context *ice = batch->ice;
-   const struct intel_l3_config *const cfg = batch->screen->l3_config_3d;
+   const struct intel_l3_config *const cfg =
+      compute ? batch->screen->l3_config_cs : batch->screen->l3_config_3d;
 
    setup_l3_config(batch, cfg);
 //      update_urb_size(brw, cfg);
@@ -1345,7 +1346,7 @@ crocus_init_render_context(struct crocus_batch *batch)
    crocus_emit_cmd(batch, GENX(STATE_SIP), foo);
 
 #if GEN_GEN == 7
-   emit_l3_state(batch);
+   emit_l3_state(batch, false);
 #endif
 
 #if GEN_GEN >= 5 || GEN_IS_G4X
@@ -1371,7 +1372,7 @@ crocus_init_compute_context(struct crocus_batch *batch)
    emit_pipeline_select(batch, GPGPU);
 
 #if GEN_GEN == 7
-   emit_l3_state(batch);
+   emit_l3_state(batch, true);
 #endif
 }
 #endif
