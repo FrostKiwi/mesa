@@ -385,13 +385,15 @@ crocus_resource_configure_aux(struct crocus_screen *screen,
     */
    assert(!res->mod_info || res->mod_info->aux_usage == ISL_AUX_USAGE_NONE);
 
-   const bool has_mcs = !res->mod_info &&
+   const bool has_mcs = devinfo->gen >= 7 && !res->mod_info &&
       isl_surf_get_mcs_surf(&screen->isl_dev, &res->surf, &res->aux.surf);
 
-   const bool has_hiz = !res->mod_info && !(INTEL_DEBUG & DEBUG_NO_HIZ) &&
+   const bool has_hiz = devinfo->gen >= 6 && !res->mod_info &&
+      !(INTEL_DEBUG & DEBUG_NO_HIZ) &&
       isl_surf_get_hiz_surf(&screen->isl_dev, &res->surf, &res->aux.surf);
 
-   const bool has_ccs = ((!res->mod_info && !(INTEL_DEBUG & DEBUG_NO_RBC)) ||
+   const bool has_ccs =
+      ((devinfo->gen >= 7 && !res->mod_info && !(INTEL_DEBUG & DEBUG_NO_RBC)) ||
        (res->mod_info && res->mod_info->aux_usage != ISL_AUX_USAGE_NONE)) &&
       isl_surf_get_ccs_surf(&screen->isl_dev, &res->surf, &res->aux.surf,
                             &res->aux.extra_aux.surf, 0);
