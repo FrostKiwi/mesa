@@ -2205,11 +2205,12 @@ crocus_upload_sampler_states(struct crocus_context *ice,
 
 #if GEN_VERSIONx10 >= 75
 static enum isl_channel_select
-pipe_to_isl_swizzle(enum pipe_swizzle swz)
+pipe_to_isl_swizzle(enum pipe_swizzle swz, bool green_to_blue)
 {
    switch (swz) {
    case PIPE_SWIZZLE_X: return ISL_CHANNEL_SELECT_RED;
-   case PIPE_SWIZZLE_Y: return ISL_CHANNEL_SELECT_GREEN;
+   case PIPE_SWIZZLE_Y: return green_to_blue ? ISL_CHANNEL_SELECT_BLUE :
+                                               ISL_CHANNEL_SELECT_GREEN;
    case PIPE_SWIZZLE_Z: return ISL_CHANNEL_SELECT_BLUE;
    case PIPE_SWIZZLE_W: return ISL_CHANNEL_SELECT_ALPHA;
    case PIPE_SWIZZLE_1: return ISL_CHANNEL_SELECT_ONE;
@@ -2268,10 +2269,10 @@ crocus_create_sampler_view(struct pipe_context *ctx,
       .format = fmt,
 #if GEN_VERSIONx10 >= 75
       .swizzle = (struct isl_swizzle) {
-         .r = pipe_to_isl_swizzle(tmpl->swizzle_r),
-         .g = pipe_to_isl_swizzle(tmpl->swizzle_g),
-         .b = pipe_to_isl_swizzle(tmpl->swizzle_b),
-         .a = pipe_to_isl_swizzle(tmpl->swizzle_a),
+         .r = pipe_to_isl_swizzle(tmpl->swizzle_r, false),
+         .g = pipe_to_isl_swizzle(tmpl->swizzle_g, false),
+         .b = pipe_to_isl_swizzle(tmpl->swizzle_b, false),
+         .a = pipe_to_isl_swizzle(tmpl->swizzle_a, false),
       },
 #else
       /* swizzling handled in shader code */
@@ -2299,12 +2300,11 @@ crocus_create_sampler_view(struct pipe_context *ctx,
        fmt == ISL_FORMAT_R32G32_UINT) {
       isv->gather_view.format = ISL_FORMAT_R32G32_FLOAT_LD;
 #if GEN_VERSIONx10 >= 75
-      // TODO HSW GREEN TO BLUE
       isv->gather_view.swizzle = (struct isl_swizzle) {
-         .r = pipe_to_isl_swizzle(tmpl->swizzle_r),
-         .g = pipe_to_isl_swizzle(tmpl->swizzle_g),
-         .b = pipe_to_isl_swizzle(tmpl->swizzle_b),
-         .a = pipe_to_isl_swizzle(tmpl->swizzle_a),
+         .r = pipe_to_isl_swizzle(tmpl->swizzle_r, GEN_VERSIONx10 == 75),
+         .g = pipe_to_isl_swizzle(tmpl->swizzle_g, GEN_VERSIONx10 == 75),
+         .b = pipe_to_isl_swizzle(tmpl->swizzle_b, GEN_VERSIONx10 == 75),
+         .a = pipe_to_isl_swizzle(tmpl->swizzle_a, GEN_VERSIONx10 == 75),
       };
 #endif
    }
