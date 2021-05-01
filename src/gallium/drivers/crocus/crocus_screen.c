@@ -140,7 +140,6 @@ crocus_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_MIXED_FRAMEBUFFER_SIZES:
    case PIPE_CAP_TGSI_VS_LAYER_VIEWPORT:
    case PIPE_CAP_TGSI_TES_LAYER_VIEWPORT:
-   case PIPE_CAP_TGSI_PACK_HALF_FLOAT:
    case PIPE_CAP_ACCELERATED:
    case PIPE_CAP_UMA:
    case PIPE_CAP_CLIP_HALFZ:
@@ -189,6 +188,7 @@ crocus_get_param(struct pipe_screen *pscreen, enum pipe_cap param)
    case PIPE_CAP_COMPUTE:
    case PIPE_CAP_SAMPLER_VIEW_TARGET:
    case PIPE_CAP_SHADER_SAMPLES_IDENTICAL:
+   case PIPE_CAP_TGSI_PACK_HALF_FLOAT:
       return devinfo->gen >= 7;
    case PIPE_CAP_QUERY_BUFFER_OBJECT:
    case PIPE_CAP_ROBUST_BUFFER_ACCESS_BEHAVIOR:
