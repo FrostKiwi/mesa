@@ -153,51 +153,27 @@ crocus_isl_format_for_pipe_format(enum pipe_format pf)
       [PIPE_FORMAT_B10G10R10A2_UNORM]       = ISL_FORMAT_B10G10R10A2_UNORM,
       [PIPE_FORMAT_R8G8B8X8_UNORM]          = ISL_FORMAT_R8G8B8X8_UNORM,
 
-      /* Just use red formats for these - they're actually renderable,
-       * and faster to sample than the legacy L/I/A/LA formats.
-       */
       [PIPE_FORMAT_I8_UNORM]                = ISL_FORMAT_R8_UNORM,
-//      [PIPE_FORMAT_I8_UINT]                 = ISL_FORMAT_R8_UINT,
-//      [PIPE_FORMAT_I8_SINT]                 = ISL_FORMAT_R8_SINT,
-//      [PIPE_FORMAT_I8_SNORM]                = ISL_FORMAT_R8_SNORM,
-//      [PIPE_FORMAT_I16_UINT]                = ISL_FORMAT_R16_UINT,
       [PIPE_FORMAT_I16_UNORM]               = ISL_FORMAT_R16_UNORM,
- //     [PIPE_FORMAT_I16_SINT]                = ISL_FORMAT_R16_SINT,
- //     [PIPE_FORMAT_I16_SNORM]               = ISL_FORMAT_R16_SNORM,
       [PIPE_FORMAT_I16_FLOAT]               = ISL_FORMAT_R16_FLOAT,
- //     [PIPE_FORMAT_I32_UINT]                = ISL_FORMAT_R32_UINT,
- //     [PIPE_FORMAT_I32_SINT]                = ISL_FORMAT_R32_SINT,
       [PIPE_FORMAT_I32_FLOAT]               = ISL_FORMAT_R32_FLOAT,
 
-      [PIPE_FORMAT_L8_UINT]                 = ISL_FORMAT_R8_UINT,
-      [PIPE_FORMAT_L8_UNORM]                = ISL_FORMAT_R8_UNORM,
-      [PIPE_FORMAT_L8_SINT]                 = ISL_FORMAT_R8_SINT,
-//      [PIPE_FORMAT_L8_SNORM]                = ISL_FORMAT_R8_SNORM,
-//      [PIPE_FORMAT_L16_UINT]                = ISL_FORMAT_R16_UINT,
-      [PIPE_FORMAT_L16_UNORM]               = ISL_FORMAT_R16_UNORM,
-//      [PIPE_FORMAT_L16_SINT]                = ISL_FORMAT_R16_SINT,
-//      [PIPE_FORMAT_L16_SNORM]               = ISL_FORMAT_R16_SNORM,
-      [PIPE_FORMAT_L16_FLOAT]               = ISL_FORMAT_R16_FLOAT,
-//      [PIPE_FORMAT_L32_UINT]                = ISL_FORMAT_R32_UINT,
-//      [PIPE_FORMAT_L32_SINT]                = ISL_FORMAT_R32_SINT,
-      [PIPE_FORMAT_L32_FLOAT]               = ISL_FORMAT_R32_FLOAT,
+      [PIPE_FORMAT_L8_UINT]                 = ISL_FORMAT_L8_UINT,
+      [PIPE_FORMAT_L8_UNORM]                = ISL_FORMAT_L8_UNORM,
+      [PIPE_FORMAT_L8_SINT]                 = ISL_FORMAT_L8_SINT,
+      [PIPE_FORMAT_L16_UNORM]               = ISL_FORMAT_L16_UNORM,
+      [PIPE_FORMAT_L16_FLOAT]               = ISL_FORMAT_L16_FLOAT,
+      [PIPE_FORMAT_L32_FLOAT]               = ISL_FORMAT_L32_FLOAT,
 
-      /* We also map alpha and luminance-alpha formats to red as well,
-       * though most of these (other than A8_UNORM) will be non-renderable.
-       */
-//      [PIPE_FORMAT_A8_UINT]                 = ISL_FORMAT_R8_UINT,
-      [PIPE_FORMAT_A8_UNORM]                = ISL_FORMAT_R8_UNORM,
-      //[PIPE_FORMAT_A8_SNORM]                = ISL_FORMAT_R8_SNORM,
-      [PIPE_FORMAT_A16_UNORM]               = ISL_FORMAT_R16_UNORM,
+      [PIPE_FORMAT_A8_UNORM]                = ISL_FORMAT_A8_UNORM,
+      [PIPE_FORMAT_A16_UNORM]               = ISL_FORMAT_A16_UNORM,
       [PIPE_FORMAT_A16_FLOAT]               = ISL_FORMAT_A16_FLOAT,
-      [PIPE_FORMAT_A32_FLOAT]               = ISL_FORMAT_R32_FLOAT,
+      [PIPE_FORMAT_A32_FLOAT]               = ISL_FORMAT_A32_FLOAT,
 
-      [PIPE_FORMAT_L8A8_UNORM]              = ISL_FORMAT_R8G8_UNORM,
-      //[PIPE_FORMAT_L8A8_SNORM]              = ISL_FORMAT_R8G8_SNORM,
-      [PIPE_FORMAT_L16A16_UNORM]            = ISL_FORMAT_R16G16_UNORM,
-      //[PIPE_FORMAT_L16A16_SNORM]            = ISL_FORMAT_R16G16_SNORM,
-      [PIPE_FORMAT_L16A16_FLOAT]            = ISL_FORMAT_R16G16_FLOAT,
-      [PIPE_FORMAT_L32A32_FLOAT]            = ISL_FORMAT_R32G32_FLOAT,
+      [PIPE_FORMAT_L8A8_UNORM]              = ISL_FORMAT_L8A8_UNORM,
+      [PIPE_FORMAT_L16A16_UNORM]            = ISL_FORMAT_L16A16_UNORM,
+      [PIPE_FORMAT_L16A16_FLOAT]            = ISL_FORMAT_L16A16_FLOAT,
+      [PIPE_FORMAT_L32A32_FLOAT]            = ISL_FORMAT_L32A32_FLOAT,
 
       /* Sadly, we have to use luminance[-alpha] formats for sRGB decoding. */
       [PIPE_FORMAT_R8_SRGB]                 = ISL_FORMAT_L8_UNORM_SRGB,
@@ -321,29 +297,29 @@ crocus_isl_format_for_pipe_format(enum pipe_format pf)
 }
 
 static enum isl_format
-get_texture_format(enum pipe_format pformat, enum isl_format def_format)
+get_render_format(enum pipe_format pformat, enum isl_format def_format)
 {
    switch (pformat) {
-   case PIPE_FORMAT_A16_UNORM:            return ISL_FORMAT_A16_UNORM;
-   case PIPE_FORMAT_A16_FLOAT:            return ISL_FORMAT_A16_FLOAT;
-   case PIPE_FORMAT_A32_FLOAT:            return ISL_FORMAT_A32_FLOAT;
+   case PIPE_FORMAT_A16_UNORM:            return ISL_FORMAT_R16_UNORM;
+   case PIPE_FORMAT_A16_FLOAT:            return ISL_FORMAT_R16_FLOAT;
+   case PIPE_FORMAT_A32_FLOAT:            return ISL_FORMAT_R32_FLOAT;
 
-   case PIPE_FORMAT_L8_UNORM:             return ISL_FORMAT_L8_UNORM;
-   case PIPE_FORMAT_L8_UINT:              return ISL_FORMAT_L8_UINT;
-   case PIPE_FORMAT_L8_SINT:              return ISL_FORMAT_L8_SINT;
-   case PIPE_FORMAT_L16_UNORM:            return ISL_FORMAT_L16_UNORM;
-   case PIPE_FORMAT_L16_FLOAT:            return ISL_FORMAT_L16_FLOAT;
-   case PIPE_FORMAT_L32_FLOAT:            return ISL_FORMAT_L32_FLOAT;
+   case PIPE_FORMAT_I8_UNORM:             return ISL_FORMAT_R8_UNORM;
+   case PIPE_FORMAT_I16_UNORM:            return ISL_FORMAT_R16_UNORM;
+   case PIPE_FORMAT_I16_FLOAT:            return ISL_FORMAT_R16_FLOAT;
+   case PIPE_FORMAT_I32_FLOAT:            return ISL_FORMAT_R32_FLOAT;
 
-   case PIPE_FORMAT_L8A8_UNORM:           return ISL_FORMAT_L8A8_UNORM;
-   case PIPE_FORMAT_L16A16_UNORM:         return ISL_FORMAT_L16A16_UNORM;
-   case PIPE_FORMAT_L16A16_FLOAT:         return ISL_FORMAT_L16A16_FLOAT;
-   case PIPE_FORMAT_L32A32_FLOAT:         return ISL_FORMAT_L32A32_FLOAT;
+   case PIPE_FORMAT_L8_UNORM:             return ISL_FORMAT_R8_UNORM;
+   case PIPE_FORMAT_L8_UINT:              return ISL_FORMAT_R8_UINT;
+   case PIPE_FORMAT_L8_SINT:              return ISL_FORMAT_R8_SINT;
+   case PIPE_FORMAT_L16_UNORM:            return ISL_FORMAT_R16_UNORM;
+   case PIPE_FORMAT_L16_FLOAT:            return ISL_FORMAT_R16_FLOAT;
+   case PIPE_FORMAT_L32_FLOAT:            return ISL_FORMAT_R32_FLOAT;
 
-   case PIPE_FORMAT_I8_UNORM:             return ISL_FORMAT_I8_UNORM;
-   case PIPE_FORMAT_I16_UNORM:            return ISL_FORMAT_I16_UNORM;
-   case PIPE_FORMAT_I16_FLOAT:            return ISL_FORMAT_I16_FLOAT;
-   case PIPE_FORMAT_I32_FLOAT:            return ISL_FORMAT_I32_FLOAT;
+   case PIPE_FORMAT_L8A8_UNORM:           return ISL_FORMAT_R8G8_UNORM;
+   case PIPE_FORMAT_L16A16_UNORM:         return ISL_FORMAT_R16G16_UNORM;
+   case PIPE_FORMAT_L16A16_FLOAT:         return ISL_FORMAT_R16G16_FLOAT;
+   case PIPE_FORMAT_L32A32_FLOAT:         return ISL_FORMAT_R32G32_FLOAT;
 
    default:
       return def_format;
@@ -359,9 +335,8 @@ crocus_format_for_usage(const struct gen_device_info *devinfo,
 
    if (pformat == PIPE_FORMAT_A8_UNORM)
      format = ISL_FORMAT_A8_UNORM;
-   if (!(usage & ISL_SURF_USAGE_RENDER_TARGET_BIT)) {
-     format = get_texture_format(pformat, format);
-   }
+   if (usage & ISL_SURF_USAGE_RENDER_TARGET_BIT)
+     format = get_render_format(pformat, format);
    if (devinfo->gen < 6) {
      if (pformat == PIPE_FORMAT_Z32_FLOAT_S8X24_UINT)
        format = ISL_FORMAT_R32_FLOAT_X8X24_TYPELESS;
