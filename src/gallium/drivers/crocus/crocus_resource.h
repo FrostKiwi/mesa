@@ -33,11 +33,6 @@ struct crocus_context;
 
 #define CROCUS_MAX_MIPLEVELS 15
 
-struct crocus_format_info {
-   enum isl_format fmt;
-   struct isl_swizzle swizzle;
-};
-
 /**
  * Resources represent a GPU buffer object or image (mipmap tree).
  *
@@ -225,9 +220,9 @@ crocus_resource_bo(struct pipe_resource *p_res)
    return res->bo;
 }
 
-struct crocus_format_info crocus_format_for_usage(const struct gen_device_info *,
-                                              enum pipe_format pf,
-                                              isl_surf_usage_flags_t usage);
+enum isl_format crocus_format_for_usage(const struct gen_device_info *,
+                                        enum pipe_format pf,
+                                        isl_surf_usage_flags_t usage);
 
 struct pipe_resource *crocus_resource_get_separate_stencil(struct pipe_resource *);
 

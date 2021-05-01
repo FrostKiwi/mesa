@@ -727,8 +727,8 @@ crocus_resource_create_with_modifiers(struct pipe_screen *pscreen,
    /* Should be handled by u_transfer_helper */
 //   assert(!util_format_is_depth_and_stencil(pfmt));
 
-   struct crocus_format_info fmt = crocus_format_for_usage(devinfo, pfmt, usage);
-   assert(fmt.fmt != ISL_FORMAT_UNSUPPORTED);
+   enum isl_format fmt = crocus_format_for_usage(devinfo, pfmt, usage);
+   assert(fmt != ISL_FORMAT_UNSUPPORTED);
    enum isl_surf_dim dim = target_to_isl_surf_dim(templ->target);
    if (devinfo->gen < 6 && has_depth)
       dim = ISL_SURF_DIM_2D;
@@ -736,7 +736,7 @@ crocus_resource_create_with_modifiers(struct pipe_screen *pscreen,
    UNUSED const bool isl_surf_created_successfully =
       isl_surf_init(&screen->isl_dev, &res->surf,
                     .dim = dim,
-                    .format = fmt.fmt,
+                    .format = fmt,
                     .width = templ->width0,
                     .height = templ->height0,
                     .depth = templ->depth0,
@@ -890,7 +890,7 @@ crocus_resource_from_handle(struct pipe_screen *pscreen,
 
    isl_surf_usage_flags_t isl_usage = pipe_bind_to_isl_usage(templ->bind);
 
-   const struct crocus_format_info fmt =
+   const enum isl_format fmt =
       crocus_format_for_usage(devinfo, templ->format, isl_usage);
    res->internal_format = templ->format;
 
@@ -901,7 +901,7 @@ crocus_resource_from_handle(struct pipe_screen *pscreen,
          UNUSED const bool isl_surf_created_successfully =
             isl_surf_init(&screen->isl_dev, &res->surf,
                           .dim = target_to_isl_surf_dim(templ->target),
-                          .format = fmt.fmt,
+                          .format = fmt,
                           .width = templ->width0,
                           .height = templ->height0,
                           .depth = templ->depth0,

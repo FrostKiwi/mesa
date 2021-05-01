@@ -157,29 +157,29 @@ crocus_isl_format_for_pipe_format(enum pipe_format pf)
        * and faster to sample than the legacy L/I/A/LA formats.
        */
       [PIPE_FORMAT_I8_UNORM]                = ISL_FORMAT_R8_UNORM,
-      [PIPE_FORMAT_I8_UINT]                 = ISL_FORMAT_R8_UINT,
-      [PIPE_FORMAT_I8_SINT]                 = ISL_FORMAT_R8_SINT,
-      [PIPE_FORMAT_I8_SNORM]                = ISL_FORMAT_R8_SNORM,
-      [PIPE_FORMAT_I16_UINT]                = ISL_FORMAT_R16_UINT,
+//      [PIPE_FORMAT_I8_UINT]                 = ISL_FORMAT_R8_UINT,
+//      [PIPE_FORMAT_I8_SINT]                 = ISL_FORMAT_R8_SINT,
+//      [PIPE_FORMAT_I8_SNORM]                = ISL_FORMAT_R8_SNORM,
+//      [PIPE_FORMAT_I16_UINT]                = ISL_FORMAT_R16_UINT,
       [PIPE_FORMAT_I16_UNORM]               = ISL_FORMAT_R16_UNORM,
-      [PIPE_FORMAT_I16_SINT]                = ISL_FORMAT_R16_SINT,
-      [PIPE_FORMAT_I16_SNORM]               = ISL_FORMAT_R16_SNORM,
+ //     [PIPE_FORMAT_I16_SINT]                = ISL_FORMAT_R16_SINT,
+ //     [PIPE_FORMAT_I16_SNORM]               = ISL_FORMAT_R16_SNORM,
       [PIPE_FORMAT_I16_FLOAT]               = ISL_FORMAT_R16_FLOAT,
-      [PIPE_FORMAT_I32_UINT]                = ISL_FORMAT_R32_UINT,
-      [PIPE_FORMAT_I32_SINT]                = ISL_FORMAT_R32_SINT,
+ //     [PIPE_FORMAT_I32_UINT]                = ISL_FORMAT_R32_UINT,
+ //     [PIPE_FORMAT_I32_SINT]                = ISL_FORMAT_R32_SINT,
       [PIPE_FORMAT_I32_FLOAT]               = ISL_FORMAT_R32_FLOAT,
 
       [PIPE_FORMAT_L8_UINT]                 = ISL_FORMAT_R8_UINT,
       [PIPE_FORMAT_L8_UNORM]                = ISL_FORMAT_R8_UNORM,
       [PIPE_FORMAT_L8_SINT]                 = ISL_FORMAT_R8_SINT,
-      [PIPE_FORMAT_L8_SNORM]                = ISL_FORMAT_R8_SNORM,
-      [PIPE_FORMAT_L16_UINT]                = ISL_FORMAT_R16_UINT,
+//      [PIPE_FORMAT_L8_SNORM]                = ISL_FORMAT_R8_SNORM,
+//      [PIPE_FORMAT_L16_UINT]                = ISL_FORMAT_R16_UINT,
       [PIPE_FORMAT_L16_UNORM]               = ISL_FORMAT_R16_UNORM,
-      [PIPE_FORMAT_L16_SINT]                = ISL_FORMAT_R16_SINT,
-      [PIPE_FORMAT_L16_SNORM]               = ISL_FORMAT_R16_SNORM,
+//      [PIPE_FORMAT_L16_SINT]                = ISL_FORMAT_R16_SINT,
+//      [PIPE_FORMAT_L16_SNORM]               = ISL_FORMAT_R16_SNORM,
       [PIPE_FORMAT_L16_FLOAT]               = ISL_FORMAT_R16_FLOAT,
-      [PIPE_FORMAT_L32_UINT]                = ISL_FORMAT_R32_UINT,
-      [PIPE_FORMAT_L32_SINT]                = ISL_FORMAT_R32_SINT,
+//      [PIPE_FORMAT_L32_UINT]                = ISL_FORMAT_R32_UINT,
+//      [PIPE_FORMAT_L32_SINT]                = ISL_FORMAT_R32_SINT,
       [PIPE_FORMAT_L32_FLOAT]               = ISL_FORMAT_R32_FLOAT,
 
       /* We also map alpha and luminance-alpha formats to red as well,
@@ -329,6 +329,8 @@ get_texture_format(enum pipe_format pformat, enum isl_format def_format)
    case PIPE_FORMAT_A32_FLOAT:            return ISL_FORMAT_A32_FLOAT;
 
    case PIPE_FORMAT_L8_UNORM:             return ISL_FORMAT_L8_UNORM;
+   case PIPE_FORMAT_L8_UINT:              return ISL_FORMAT_L8_UINT;
+   case PIPE_FORMAT_L8_SINT:              return ISL_FORMAT_L8_SINT;
    case PIPE_FORMAT_L16_UNORM:            return ISL_FORMAT_L16_UNORM;
    case PIPE_FORMAT_L16_FLOAT:            return ISL_FORMAT_L16_FLOAT;
    case PIPE_FORMAT_L32_FLOAT:            return ISL_FORMAT_L32_FLOAT;
@@ -348,36 +350,15 @@ get_texture_format(enum pipe_format pformat, enum isl_format def_format)
    }
 }
 
-struct crocus_format_info
+enum isl_format
 crocus_format_for_usage(const struct gen_device_info *devinfo,
                       enum pipe_format pformat,
                       isl_surf_usage_flags_t usage)
 {
    enum isl_format format = crocus_isl_format_for_pipe_format(pformat);
-   const struct isl_format_layout *fmtl = isl_format_get_layout(format);
-   struct isl_swizzle swizzle = ISL_SWIZZLE_IDENTITY;
 
-   if (!util_format_is_srgb(pformat)) {
-      if (util_format_is_intensity(pformat)) {
-         swizzle = ISL_SWIZZLE(RED, RED, RED, RED);
-      } else if (util_format_is_luminance(pformat)) {
-         swizzle = ISL_SWIZZLE(RED, RED, RED, ONE);
-      } else if (util_format_is_luminance_alpha(pformat)) {
-         swizzle = ISL_SWIZZLE(RED, RED, RED, GREEN);
-      } else if (util_format_is_alpha(pformat)) {
-         swizzle = ISL_SWIZZLE(ZERO, ZERO, ZERO, RED);
-      }
-   }
-
-   /* When faking RGBX pipe formats with RGBA ISL formats, override alpha. */
-   if (!util_format_has_alpha(pformat) && fmtl->channels.a.type != ISL_VOID) {
-      swizzle = ISL_SWIZZLE(RED, GREEN, BLUE, ONE);
-   }
-
-   if (pformat == PIPE_FORMAT_A8_UNORM) {
+   if (pformat == PIPE_FORMAT_A8_UNORM)
      format = ISL_FORMAT_A8_UNORM;
-     swizzle = ISL_SWIZZLE_IDENTITY;
-   }
    if (!(usage & ISL_SURF_USAGE_RENDER_TARGET_BIT)) {
      format = get_texture_format(pformat, format);
    }
@@ -402,12 +383,11 @@ crocus_format_for_usage(const struct gen_device_info *devinfo,
     * here.
     */
    if (isl_format_is_rgbx(format) &&
-       !isl_format_supports_rendering(devinfo, format)) {
+       !isl_format_supports_rendering(devinfo, format) &&
+       (usage & ISL_SURF_USAGE_RENDER_TARGET_BIT))
       format = isl_format_rgbx_to_rgba(format);
-      swizzle = ISL_SWIZZLE(RED, GREEN, BLUE, ONE);
-   }
 
-   return (struct crocus_format_info) { .fmt = format, .swizzle = swizzle };
+   return format;
 }
 
 /**
@@ -472,11 +452,7 @@ crocus_is_format_supported(struct pipe_screen *pscreen,
 
    if (usage & PIPE_BIND_RENDER_TARGET) {
       /* Alpha and luminance-alpha formats other than A8_UNORM are not
-       * renderable.  For texturing, we can use R or RG formats with
-       * shader channel selects (SCS) to swizzle the data into the correct
-       * channels.  But for render targets, the hardware prohibits using
-       * SCS to move shader outputs between the RGB and A channels, as it
-       * would alter what data is used for alpha blending.
+       * renderable.
        *
        * For BLORP, we can apply the swizzle in the shader.  But for
        * general rendering, this would mean recompiling the shader, which

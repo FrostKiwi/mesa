@@ -532,23 +532,23 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
       if (crocus_resource_unfinished_aux_import(dst_res))
          crocus_resource_finish_aux_import(ctx->screen, dst_res);
 
-      struct crocus_format_info src_fmt =
+      enum isl_format src_fmt =
          crocus_format_for_usage(devinfo, src_pfmt, ISL_SURF_USAGE_TEXTURE_BIT);
       enum isl_aux_usage src_aux_usage =
-         crocus_resource_texture_aux_usage(ice, src_res, src_fmt.fmt);
+         crocus_resource_texture_aux_usage(ice, src_res, src_fmt);
 
-      crocus_resource_prepare_texture(ice, src_res, src_fmt.fmt,
+      crocus_resource_prepare_texture(ice, src_res, src_fmt,
                                     info->src.level, 1, info->src.box.z,
                                     info->src.box.depth);
       //      crocus_emit_buffer_barrier_for(batch, src_res->bo,
       //                                   CROCUS_DOMAIN_OTHER_READ);
 
-      struct crocus_format_info dst_fmt =
+      enum isl_format dst_fmt =
          crocus_format_for_usage(devinfo, dst_pfmt,
                                ISL_SURF_USAGE_RENDER_TARGET_BIT);
       enum isl_aux_usage dst_aux_usage =
          crocus_resource_render_aux_usage(ice, dst_res, info->dst.level,
-                                        dst_fmt.fmt, false);
+                                        dst_fmt, false);
 
       struct blorp_surf src_surf, dst_surf;
       crocus_blorp_surf_for_resource(&ice->vtbl, &screen->isl_dev,  &src_surf,
@@ -565,7 +565,7 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
       //                                   CROCUS_DOMAIN_RENDER_WRITE);
 
       if (crocus_batch_references(batch, src_res->bo))
-         tex_cache_flush_hack(batch, src_fmt.fmt, src_res->surf.format);
+         tex_cache_flush_hack(batch, src_fmt, src_res->surf.format);
 
       if (dst_res->base.target == PIPE_BUFFER) {
          util_range_add(&dst_res->base, &dst_res->valid_buffer_range,
@@ -581,16 +581,16 @@ crocus_blit(struct pipe_context *ctx, const struct pipe_blit_info *info)
 
          blorp_blit(&blorp_batch,
                     &src_surf, info->src.level, src_z,
-                    src_fmt.fmt, src_fmt.swizzle,
+                    src_fmt, ISL_SWIZZLE_IDENTITY,
                     &dst_surf, info->dst.level, dst_z,
-                    dst_fmt.fmt, dst_fmt.swizzle,
+                    dst_fmt, ISL_SWIZZLE_IDENTITY,
                     src_x0, src_y0, src_x1, src_y1,
                     dst_x0, dst_y0, dst_x1, dst_y1,
                     filter, mirror_x, mirror_y);
 
       }
 
-      tex_cache_flush_hack(batch, src_fmt.fmt, src_res->surf.format);
+      tex_cache_flush_hack(batch, src_fmt, src_res->surf.format);
 
       crocus_resource_finish_render(ice, dst_res, info->dst.level,
                                   info->dst.box.z, info->dst.box.depth,

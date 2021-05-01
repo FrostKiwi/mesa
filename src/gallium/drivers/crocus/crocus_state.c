@@ -2205,15 +2205,15 @@ crocus_upload_sampler_states(struct crocus_context *ice,
 
 #if GEN_VERSIONx10 == 75
 static enum isl_channel_select
-fmt_swizzle(const struct crocus_format_info *fmt, enum pipe_swizzle swz)
+pipe_to_isl_swizzle(enum pipe_swizzle swz)
 {
    switch (swz) {
-   case PIPE_SWIZZLE_X: return fmt->swizzle.r;
-   case PIPE_SWIZZLE_Y: return fmt->swizzle.g;
-   case PIPE_SWIZZLE_Z: return fmt->swizzle.b;
-   case PIPE_SWIZZLE_W: return fmt->swizzle.a;
-   case PIPE_SWIZZLE_1: return SCS_ONE;
-   case PIPE_SWIZZLE_0: return SCS_ZERO;
+   case PIPE_SWIZZLE_X: return ISL_CHANNEL_SELECT_RED;
+   case PIPE_SWIZZLE_Y: return ISL_CHANNEL_SELECT_GREEN;
+   case PIPE_SWIZZLE_Z: return ISL_CHANNEL_SELECT_BLUE;
+   case PIPE_SWIZZLE_W: return ISL_CHANNEL_SELECT_ALPHA;
+   case PIPE_SWIZZLE_1: return ISL_CHANNEL_SELECT_ONE;
+   case PIPE_SWIZZLE_0: return ISL_CHANNEL_SELECT_ZERO;
    default: unreachable("invalid swizzle");
    }
 }
@@ -2259,19 +2259,19 @@ crocus_create_sampler_view(struct pipe_context *ctx,
        isv->base.target == PIPE_TEXTURE_CUBE_ARRAY)
       usage |= ISL_SURF_USAGE_CUBE_BIT;
 
-   const struct crocus_format_info fmt =
+   const enum isl_format fmt =
       crocus_format_for_usage(devinfo, tmpl->format, usage);
 
    isv->clear_color = isv->res->aux.clear_color;
 
    isv->view = (struct isl_view) {
-      .format = fmt.fmt,
+      .format = fmt,
 #if GEN_VERSIONx10 == 75
       .swizzle = (struct isl_swizzle) {
-         .r = fmt_swizzle(&fmt, tmpl->swizzle_r),
-         .g = fmt_swizzle(&fmt, tmpl->swizzle_g),
-         .b = fmt_swizzle(&fmt, tmpl->swizzle_b),
-         .a = fmt_swizzle(&fmt, tmpl->swizzle_a),
+         .r = pipe_to_isl_swizzle(tmpl->swizzle_r),
+         .g = pipe_to_isl_swizzle(tmpl->swizzle_g),
+         .b = pipe_to_isl_swizzle(tmpl->swizzle_b),
+         .a = pipe_to_isl_swizzle(tmpl->swizzle_a),
       },
 #else
       /* swizzling handled in shader code */
@@ -2294,17 +2294,17 @@ crocus_create_sampler_view(struct pipe_context *ctx,
    isv->gather_view = isv->view;
 
 #if GEN_GEN >= 7
-   if (fmt.fmt == ISL_FORMAT_R32G32_FLOAT ||
-       fmt.fmt == ISL_FORMAT_R32G32_SINT ||
-       fmt.fmt == ISL_FORMAT_R32G32_UINT) {
+   if (fmt == ISL_FORMAT_R32G32_FLOAT ||
+       fmt == ISL_FORMAT_R32G32_SINT ||
+       fmt == ISL_FORMAT_R32G32_UINT) {
       isv->gather_view.format = ISL_FORMAT_R32G32_FLOAT_LD;
 #if GEN_VERSIONx10 == 75
       // TODO HSW GREEN TO BLUE
       isv->gather_view.swizzle = (struct isl_swizzle) {
-         .r = fmt_swizzle(&fmt, tmpl->swizzle_r),
-         .g = fmt_swizzle(&fmt, tmpl->swizzle_g),
-         .b = fmt_swizzle(&fmt, tmpl->swizzle_b),
-         .a = fmt_swizzle(&fmt, tmpl->swizzle_a),
+         .r = pipe_to_isl_swizzle(tmpl->swizzle_r),
+         .g = pipe_to_isl_swizzle(tmpl->swizzle_g),
+         .b = pipe_to_isl_swizzle(tmpl->swizzle_b),
+         .a = pipe_to_isl_swizzle(tmpl->swizzle_a),
       };
 #endif
    }
@@ -2317,7 +2317,7 @@ crocus_create_sampler_view(struct pipe_context *ctx,
     * the surface is FLOAT, and simply reinterpret the resulting
     * bits.
     */
-   switch (fmt.fmt) {
+   switch (fmt) {
    case ISL_FORMAT_R8_SINT:
    case ISL_FORMAT_R8_UINT:
       isv->gather_view.format = ISL_FORMAT_R8_UNORM;
@@ -2379,11 +2379,11 @@ crocus_create_surface(struct pipe_context *ctx,
    else
       usage = ISL_SURF_USAGE_RENDER_TARGET_BIT;
 
-   const struct crocus_format_info fmt =
+   const enum isl_format fmt =
       crocus_format_for_usage(devinfo, tmpl->format, usage);
 
    if ((usage & ISL_SURF_USAGE_RENDER_TARGET_BIT) &&
-       !isl_format_supports_rendering(devinfo, fmt.fmt)) {
+       !isl_format_supports_rendering(devinfo, fmt)) {
       /* Framebuffer validation will reject this invalid case, but it
        * hasn't had the opportunity yet.  In the meantime, we need to
        * avoid hitting ISL asserts about unsupported formats below.
@@ -2413,7 +2413,7 @@ crocus_create_surface(struct pipe_context *ctx,
 
    struct isl_view *view = &surf->view;
    *view = (struct isl_view) {
-      .format = fmt.fmt,
+      .format = fmt,
       .base_level = tmpl->u.tex.level,
       .levels = 1,
       .base_array_layer = tmpl->u.tex.first_layer,
@@ -2425,7 +2425,7 @@ crocus_create_surface(struct pipe_context *ctx,
 #if GEN_GEN == 7
    struct isl_view *read_view = &surf->read_view;
    *read_view = (struct isl_view) {
-      .format = fmt.fmt,
+      .format = fmt,
       .base_level = tmpl->u.tex.level,
       .levels = 1,
       .base_array_layer = tmpl->u.tex.first_layer,
@@ -2457,7 +2457,7 @@ crocus_create_surface(struct pipe_context *ctx,
     * miplevel, and that the resource is single-sampled.  Gallium may try
     * and create an uncompressed view with multiple layers, however.
     */
-   assert(!isl_format_is_compressed(fmt.fmt));
+   assert(!isl_format_is_compressed(fmt));
    assert(res->surf.samples == 1);
    assert(view->levels == 1);
 
@@ -2506,7 +2506,7 @@ crocus_create_surface(struct pipe_context *ctx,
    /* Scale down the image dimensions by the block size. */
    const struct isl_format_layout *fmtl =
       isl_format_get_layout(res->surf.format);
-   isl_surf.format = fmt.fmt;
+   isl_surf.format = fmt;
    isl_surf.logical_level0_px = isl_surf_get_logical_level0_el(&isl_surf);
    isl_surf.phys_level0_sa = isl_surf_get_phys_level0_el(&isl_surf);
    tile_x_sa /= fmtl->bw;
@@ -2581,23 +2581,23 @@ crocus_set_shader_images(struct pipe_context *ctx,
          res->bind_stages |= 1 << stage;
 
          isl_surf_usage_flags_t usage = ISL_SURF_USAGE_STORAGE_BIT;
-         enum isl_format isl_fmt =
-            crocus_format_for_usage(devinfo, img->format, usage).fmt;
+         enum isl_format fmt =
+            crocus_format_for_usage(devinfo, img->format, usage);
 
          if (img->shader_access & PIPE_IMAGE_ACCESS_READ) {
             /* On Gen8, try to use typed surfaces reads (which support a
              * limited number of formats), and if not possible, fall back
              * to untyped reads.
              */
-           if (!isl_has_matching_typed_storage_image_format(devinfo, isl_fmt))
-               isl_fmt = ISL_FORMAT_RAW;
+           if (!isl_has_matching_typed_storage_image_format(devinfo, fmt))
+               fmt = ISL_FORMAT_RAW;
             else
-               isl_fmt = isl_lower_storage_image_format(devinfo, isl_fmt);
+               fmt = isl_lower_storage_image_format(devinfo, fmt);
          }
 
          if (res->base.target != PIPE_BUFFER) {
             struct isl_view view = {
-               .format = isl_fmt,
+               .format = fmt,
                .base_level = img->u.tex.level,
                .levels = 1,
                .base_array_layer = img->u.tex.first_layer,
@@ -3173,45 +3173,45 @@ crocus_create_vertex_elements(struct pipe_context *ctx,
    }
 
    for (int i = 0; i < count; i++) {
-      const struct crocus_format_info fmt =
+      const enum isl_format fmt =
          crocus_format_for_usage(devinfo, state[i].src_format, 0);
       unsigned comp[4] = { VFCOMP_STORE_SRC, VFCOMP_STORE_SRC,
                            VFCOMP_STORE_SRC, VFCOMP_STORE_SRC };
-      enum isl_format actual_fmt = fmt.fmt;
-      cso->fmt[i] = fmt.fmt;
+      enum isl_format actual_fmt = fmt;
+      cso->fmt[i] = fmt;
 
 #if !(GEN_VERSIONx10 == 75)
-      if (fmt.fmt == ISL_FORMAT_R10G10B10A2_USCALED ||
-          fmt.fmt == ISL_FORMAT_R10G10B10A2_SSCALED ||
-          fmt.fmt == ISL_FORMAT_R10G10B10A2_UNORM ||
-          fmt.fmt == ISL_FORMAT_R10G10B10A2_SNORM ||
-          fmt.fmt == ISL_FORMAT_R10G10B10A2_SINT ||
-          fmt.fmt == ISL_FORMAT_B10G10R10A2_USCALED ||
-          fmt.fmt == ISL_FORMAT_B10G10R10A2_SSCALED ||
-          fmt.fmt == ISL_FORMAT_B10G10R10A2_UNORM ||
-          fmt.fmt == ISL_FORMAT_B10G10R10A2_SNORM ||
-          fmt.fmt == ISL_FORMAT_B10G10R10A2_UINT ||
-          fmt.fmt == ISL_FORMAT_B10G10R10A2_SINT)
+      if (fmt == ISL_FORMAT_R10G10B10A2_USCALED ||
+          fmt == ISL_FORMAT_R10G10B10A2_SSCALED ||
+          fmt == ISL_FORMAT_R10G10B10A2_UNORM ||
+          fmt == ISL_FORMAT_R10G10B10A2_SNORM ||
+          fmt == ISL_FORMAT_R10G10B10A2_SINT ||
+          fmt == ISL_FORMAT_B10G10R10A2_USCALED ||
+          fmt == ISL_FORMAT_B10G10R10A2_SSCALED ||
+          fmt == ISL_FORMAT_B10G10R10A2_UNORM ||
+          fmt == ISL_FORMAT_B10G10R10A2_SNORM ||
+          fmt == ISL_FORMAT_B10G10R10A2_UINT ||
+          fmt == ISL_FORMAT_B10G10R10A2_SINT)
          actual_fmt = ISL_FORMAT_R10G10B10A2_UINT;
-      if (fmt.fmt == ISL_FORMAT_R8G8B8_SINT)
+      if (fmt == ISL_FORMAT_R8G8B8_SINT)
           actual_fmt = ISL_FORMAT_R8G8B8A8_SINT;
-      if (fmt.fmt == ISL_FORMAT_R8G8B8_UINT)
+      if (fmt == ISL_FORMAT_R8G8B8_UINT)
           actual_fmt = ISL_FORMAT_R8G8B8A8_UINT;
-      if (fmt.fmt == ISL_FORMAT_R16G16B16_SINT)
+      if (fmt == ISL_FORMAT_R16G16B16_SINT)
           actual_fmt = ISL_FORMAT_R16G16B16A16_SINT;
-      if (fmt.fmt == ISL_FORMAT_R16G16B16_UINT)
+      if (fmt == ISL_FORMAT_R16G16B16_UINT)
           actual_fmt = ISL_FORMAT_R16G16B16A16_UINT;
 #endif
 
       cso->vbo_index[i] = state[i].vertex_buffer_index;
       cso->instance_divisor[i] = state[i].instance_divisor;
-      switch (isl_format_get_num_channels(fmt.fmt)) {
+      switch (isl_format_get_num_channels(fmt)) {
       case 0: comp[0] = VFCOMP_STORE_0; /* fallthrough */
       case 1: comp[1] = VFCOMP_STORE_0; /* fallthrough */
       case 2: comp[2] = VFCOMP_STORE_0; /* fallthrough */
       case 3:
-         comp[3] = isl_format_has_int_channel(fmt.fmt) ? VFCOMP_STORE_1_INT
-                                                       : VFCOMP_STORE_1_FP;
+         comp[3] = isl_format_has_int_channel(fmt) ? VFCOMP_STORE_1_INT
+                                                   : VFCOMP_STORE_1_FP;
          break;
       }
       crocus_pack_state(GENX(VERTEX_ELEMENT_STATE), ve_pack_dest, ve) {
@@ -3239,7 +3239,7 @@ crocus_create_vertex_elements(struct pipe_context *ctx,
     */
    if (count) {
       const unsigned edgeflag_index = count - 1;
-      const struct crocus_format_info fmt =
+      const enum isl_format fmt =
          crocus_format_for_usage(devinfo, state[edgeflag_index].src_format, 0);
       crocus_pack_state(GENX(VERTEX_ELEMENT_STATE), cso->edgeflag_ve, ve) {
 #if GEN_GEN >= 6
@@ -3248,7 +3248,7 @@ crocus_create_vertex_elements(struct pipe_context *ctx,
          ve.VertexBufferIndex = state[edgeflag_index].vertex_buffer_index;
          ve.Valid = true;
          ve.SourceElementOffset = state[edgeflag_index].src_offset;
-         ve.SourceElementFormat = fmt.fmt;
+         ve.SourceElementFormat = fmt;
          ve.Component0Control = VFCOMP_STORE_SRC;
          ve.Component1Control = VFCOMP_STORE_0;
          ve.Component2Control = VFCOMP_STORE_0;
