@@ -4284,7 +4284,7 @@ emit_sampler_view(struct crocus_context *ice,
       const struct isl_format_layout *fmtl = isl_format_get_layout(isv->view.format);
       const unsigned cpp = isv->view.format == ISL_FORMAT_RAW ? 1 : fmtl->bpb / 8;
       unsigned final_size =
-         MIN3(isv->base.u.buf.size, isv->res->bo->size - isv->res->offset - offset,
+         MIN3(isv->base.u.buf.size, isv->res->bo->size - isv->res->offset,
               CROCUS_MAX_TEXTURE_BUFFER_SIZE * cpp);
       isl_buffer_fill_state(isl_dev, surf_state,
                             .address = crocus_state_reloc(batch, offset + isl_dev->ss.addr_offset,
