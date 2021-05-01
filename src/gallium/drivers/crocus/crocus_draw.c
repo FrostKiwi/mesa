@@ -375,6 +375,10 @@ crocus_draw_vbo(struct pipe_context *ctx,
       ice->state.stage_dirty |= CROCUS_ALL_STAGE_DIRTY_FOR_RENDER;
    }
 
+   /* Emit Sandybridge workaround flushes on every primitive, for safety. */
+   if (screen->devinfo.gen == 6)
+      crocus_emit_post_sync_nonzero_flush(batch);
+
    crocus_update_draw_info(ice, info, draws);
 
    crocus_update_compiled_shaders(ice);
