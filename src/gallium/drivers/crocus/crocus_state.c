@@ -1674,7 +1674,7 @@ crocus_create_rasterizer_state(struct pipe_context *ctx,
       sf.FrontWinding = state->front_ccw ? 1 : 0; // Or the other way...
       sf.CullMode = translate_cull_mode(state->cull_face);
 
-      sf.ScissorRectangleEnable = state->scissor;
+      sf.ScissorRectangleEnable = true;
 
 #if GEN_GEN == 6
       sf.AttributeSwizzleEnable = true;
@@ -1769,6 +1769,8 @@ crocus_bind_rasterizer_state(struct pipe_context *ctx, void *state)
 #if GEN_GEN >= 6
       if (cso_changed(cso.half_pixel_center))
          ice->state.dirty |= CROCUS_DIRTY_GEN6_MULTISAMPLE;
+      if (cso_changed(cso.scissor))
+         ice->state.dirty |= CROCUS_DIRTY_GEN6_SCISSOR_RECT;
 #endif
 
       if (cso_changed(cso.line_stipple_enable) || cso_changed(cso.poly_stipple_enable))
@@ -2818,6 +2820,9 @@ crocus_set_viewport_states(struct pipe_context *ctx,
 
    ice->state.dirty |= CROCUS_DIRTY_SF_CL_VIEWPORT;
    ice->state.dirty |= CROCUS_DIRTY_RASTER;
+#if GEN_GEN >= 6
+   ice->state.dirty |= CROCUS_DIRTY_GEN6_SCISSOR_RECT;
+#endif
 
    if (ice->state.cso_rast && (!ice->state.cso_rast->cso.depth_clip_near ||
                                !ice->state.cso_rast->cso.depth_clip_far))
@@ -6088,11 +6093,29 @@ crocus_upload_dirty_render_state(struct crocus_context *ice,
 
    if (dirty & CROCUS_DIRTY_GEN6_SCISSOR_RECT) {
       /* Align to 64-byte boundary as per anv. */
-      uint32_t scissor_offset =
-         emit_state(batch,
-                    ice->state.scissors,
-                    sizeof(struct pipe_scissor_state) *
-                    ice->state.num_viewports, 64);
+      uint32_t scissor_offset;
+      struct pipe_framebuffer_state *cso_fb = &ice->state.framebuffer;
+      struct pipe_rasterizer_state *cso_state = &ice->state.cso_rast->cso;
+      struct pipe_scissor_state *scissor_map = (void *)
+         stream_state(batch, sizeof(struct pipe_scissor_state) * ice->state.num_viewports,
+                      64, &scissor_offset);
+      for (int i = 0; i < ice->state.num_viewports; i++) {
+         struct pipe_viewport_state *vp = &ice->state.viewports[i];
+         struct pipe_scissor_state scissor = (struct pipe_scissor_state) {
+            .minx = MAX2(-fabsf(vp->scale[0]) + vp->translate[0], 0),
+            .maxx = MIN2( fabsf(vp->scale[0]) + vp->translate[0], cso_fb->width) - 1,
+            .miny = MAX2(-fabsf(vp->scale[1]) + vp->translate[1], 0),
+            .maxy = MIN2( fabsf(vp->scale[1]) + vp->translate[1], cso_fb->height) - 1,
+         };
+         if (cso_state->scissor) {
+            struct pipe_scissor_state *s = &ice->state.scissors[i];
+            scissor.minx = MAX2(scissor.minx, s->minx);
+            scissor.miny = MAX2(scissor.miny, s->miny);
+            scissor.maxx = MIN2(scissor.maxx, s->maxx);
+            scissor.maxy = MIN2(scissor.maxy, s->maxy);
+         }
+         scissor_map[i] = scissor;
+      }
 
       crocus_emit_cmd(batch, GENX(3DSTATE_SCISSOR_STATE_POINTERS), ptr) {
          ptr.ScissorRectPointer = scissor_offset;
