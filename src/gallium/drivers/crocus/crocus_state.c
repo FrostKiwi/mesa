@@ -2203,7 +2203,7 @@ crocus_upload_sampler_states(struct crocus_context *ice,
    }
 }
 
-#if GEN_VERSIONx10 == 75
+#if GEN_VERSIONx10 >= 75
 static enum isl_channel_select
 pipe_to_isl_swizzle(enum pipe_swizzle swz)
 {
@@ -2266,7 +2266,7 @@ crocus_create_sampler_view(struct pipe_context *ctx,
 
    isv->view = (struct isl_view) {
       .format = fmt,
-#if GEN_VERSIONx10 == 75
+#if GEN_VERSIONx10 >= 75
       .swizzle = (struct isl_swizzle) {
          .r = pipe_to_isl_swizzle(tmpl->swizzle_r),
          .g = pipe_to_isl_swizzle(tmpl->swizzle_g),
@@ -2298,7 +2298,7 @@ crocus_create_sampler_view(struct pipe_context *ctx,
        fmt == ISL_FORMAT_R32G32_SINT ||
        fmt == ISL_FORMAT_R32G32_UINT) {
       isv->gather_view.format = ISL_FORMAT_R32G32_FLOAT_LD;
-#if GEN_VERSIONx10 == 75
+#if GEN_VERSIONx10 >= 75
       // TODO HSW GREEN TO BLUE
       isv->gather_view.swizzle = (struct isl_swizzle) {
          .r = pipe_to_isl_swizzle(tmpl->swizzle_r),
