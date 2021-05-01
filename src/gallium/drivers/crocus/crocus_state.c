@@ -3193,11 +3193,19 @@ crocus_create_vertex_elements(struct pipe_context *ctx,
           fmt.fmt == ISL_FORMAT_B10G10R10A2_UINT ||
           fmt.fmt == ISL_FORMAT_B10G10R10A2_SINT)
          actual_fmt = ISL_FORMAT_R10G10B10A2_UINT;
+      if (fmt.fmt == ISL_FORMAT_R8G8B8_SINT)
+          actual_fmt = ISL_FORMAT_R8G8B8A8_SINT;
+      if (fmt.fmt == ISL_FORMAT_R8G8B8_UINT)
+          actual_fmt = ISL_FORMAT_R8G8B8A8_UINT;
+      if (fmt.fmt == ISL_FORMAT_R16G16B16_SINT)
+          actual_fmt = ISL_FORMAT_R16G16B16A16_SINT;
+      if (fmt.fmt == ISL_FORMAT_R16G16B16_UINT)
+          actual_fmt = ISL_FORMAT_R16G16B16A16_UINT;
 #endif
 
       cso->vbo_index[i] = state[i].vertex_buffer_index;
       cso->instance_divisor[i] = state[i].instance_divisor;
-      switch (isl_format_get_num_channels(actual_fmt)) {
+      switch (isl_format_get_num_channels(fmt.fmt)) {
       case 0: comp[0] = VFCOMP_STORE_0; /* fallthrough */
       case 1: comp[1] = VFCOMP_STORE_0; /* fallthrough */
       case 2: comp[2] = VFCOMP_STORE_0; /* fallthrough */

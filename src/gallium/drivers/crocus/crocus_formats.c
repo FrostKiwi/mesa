@@ -548,6 +548,12 @@ crocus_is_format_supported(struct pipe_screen *pscreen,
 	    format == ISL_FORMAT_R10G10B10A2_SSCALED ||
 	    format == ISL_FORMAT_B10G10R10A2_SSCALED)
 	  supported = true;
+
+        if (format == ISL_FORMAT_R8G8B8_SINT ||
+            format == ISL_FORMAT_R8G8B8_UINT ||
+            format == ISL_FORMAT_R16G16B16_SINT ||
+            format == ISL_FORMAT_R16G16B16_UINT)
+           supported = true;
       }
 
    }
