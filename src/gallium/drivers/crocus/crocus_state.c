@@ -6715,6 +6715,7 @@ crocus_upload_compute_state(struct crocus_context *ice,
          idd.KernelStartPointer = ksp;
          idd.SamplerStatePointer = shs->sampler_offset;
          idd.BindingTablePointer = ice->shaders.prog[MESA_SHADER_COMPUTE]->bind_bo_offset;
+         idd.BindingTableEntryCount = MIN2(shader->bt.size_bytes / 4, 31);
          idd.NumberofThreadsinGPGPUThreadGroup = threads;
          idd.ConstantURBEntryReadLength = cs_prog_data->push.per_thread.regs;
          idd.BarrierEnable = cs_prog_data->uses_barrier;
