@@ -94,6 +94,18 @@ get_blit_intratile_offset_el(struct crocus_resource *res,
    }
 }
 
+static uint32_t
+color_depth_for_cpp(int cpp)
+{
+   switch (cpp) {
+   case 4: return COLOR_DEPTH__32bit;
+   case 2: return COLOR_DEPTH__565;
+   case 1: return COLOR_DEPTH__8bit;
+   default:
+      unreachable("not reached");
+   }
+}
+
 static bool emit_copy_blt(struct crocus_batch *batch,
                           struct crocus_resource *src,
                           struct crocus_resource *dst,
@@ -155,7 +167,7 @@ static bool emit_copy_blt(struct crocus_batch *batch,
       xyblt.SourceTilingEnable = src->surf.tiling != ISL_TILING_LINEAR;
       xyblt.SourceBaseAddress = ro_bo(src->bo, src_offset);
       xyblt.DestinationBaseAddress = rw_bo(dst->bo, dst_offset);
-      xyblt.ColorDepth = cpp == 4 ? COLOR_DEPTH__32bit : COLOR_DEPTH__565;
+      xyblt.ColorDepth = color_depth_for_cpp(cpp);
       xyblt._32bppByteMask = cpp == 4 ? 0x3 : 0x1;
       xyblt.DestinationX1Coordinate = dst_x;
       xyblt.DestinationY1Coordinate = dst_y;
