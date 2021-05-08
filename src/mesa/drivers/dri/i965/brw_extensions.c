@@ -42,6 +42,8 @@ brw_init_extensions(struct gl_context *ctx)
    assert(devinfo->ver >= 4);
 
    ctx->Extensions.ARB_arrays_of_arrays = true;
+   ctx->Extensions.ARB_blend_func_extended =
+      !driQueryOptionb(&brw->screen->optionCache, "disable_blend_func_extended");
    ctx->Extensions.ARB_buffer_storage = true;
    ctx->Extensions.ARB_clear_texture = true;
    ctx->Extensions.ARB_clip_control = true;
@@ -182,8 +184,6 @@ brw_init_extensions(struct gl_context *ctx)
       ctx->Extensions.ARB_transform_feedback2 = true;
 
    if (devinfo->ver >= 6) {
-      ctx->Extensions.ARB_blend_func_extended =
-         !driQueryOptionb(&brw->screen->optionCache, "disable_blend_func_extended");
       ctx->Extensions.ARB_conditional_render_inverted = true;
       ctx->Extensions.ARB_cull_distance = true;
       ctx->Extensions.ARB_draw_buffers_blend = true;
